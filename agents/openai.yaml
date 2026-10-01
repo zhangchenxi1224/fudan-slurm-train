@@ -1,0 +1,4 @@
+interface:
+  display_name: "fudan-slurm-train Skill"
+  short_description: "Upload code and launch Fudan cluster training jobs"
+  default_prompt: "Use $fudan-slurm-train to upload my training code to the Fudan Slurm cluster, choose resources, and start a job."

@@ -1,0 +1,21 @@
+{
+  "run_namespace": "YOUR_RUN_NAMESPACE",
+  "clusters": {
+    "a800": {
+      "ssh_alias": "fudan-a800",
+      "default_partition": "a800",
+      "allowed_partitions": ["a800"],
+      "remote_root": "~/codex_runs",
+      "account": "",
+      "qos": ""
+    },
+    "x090": {
+      "ssh_alias": "fudan-x090",
+      "default_partition": "fnlp-x090",
+      "allowed_partitions": ["fnlp-x090", "fnlp-4090", "fnlp-3090", "fnlp-a800"],
+      "remote_root": "~/codex_runs",
+      "account": "",
+      "qos": ""
+    }
+  }
+}

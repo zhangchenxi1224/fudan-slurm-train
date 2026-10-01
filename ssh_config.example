@@ -1,0 +1,18 @@
+# Template only: replace ALL placeholders before adding these entries to ~/.ssh/config.
+# Every authorized person should use their own private key for the shared account.
+# Confirm each endpoint's host-key fingerprint with the cluster maintainer.
+Host fudan-a800
+    HostName A800_LOGIN_HOST
+    Port SSH_PORT
+    User SHARED_CLUSTER_USER
+    IdentityFile ~/.ssh/fudan_slurm_personal
+    IdentitiesOnly yes
+    # ProxyJump YOUR_BASTION_ALIAS
+
+Host fudan-x090
+    HostName X090_LOGIN_HOST
+    Port SSH_PORT
+    User SHARED_CLUSTER_USER
+    IdentityFile ~/.ssh/fudan_slurm_personal
+    IdentitiesOnly yes
+    # ProxyJump YOUR_BASTION_ALIAS

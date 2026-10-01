@@ -1,0 +1,35 @@
+# User-specific cluster configuration and credentials
+config.local.json
+config.*.local.json
+*.local.json
+.env
+.env.*
+.ssh/
+.aws/
+.azure/
+.kube/
+.netrc
+.pypirc
+.git-credentials
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+id_ecdsa*
+id_dsa*
+
+# Local Python environments and test/build output
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+logs/
+outputs/
+dist/
+*.zip
+.DS_Store
