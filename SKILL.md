@@ -10,6 +10,7 @@ Use `scripts/submit_training.py` to turn a local file or project into a Slurm jo
 ## Configuration
 
 - First-time access or missing SSH configuration: read [references/access.md](references/access.md). Existing authorized access may be reused.
+- Help fill only missing local configuration from confirmed user/maintainer information. Use `scripts/doctor.py` for local checks; add `--remote --host <configured-key>` for bounded read-only remote checks when connectivity should be available. A local pass does not verify SSH access, and a remote pass does not verify GPU execution or account/QoS permissions.
 - Resource choices, CLI details, environment setup or queue/log checks: read [references/cluster.md](references/cluster.md).
 - Local dependencies: Python >= 3.10 and OpenSSH `ssh`/`scp`; remote dependencies: Bash, `tar` and Slurm. Network access is assumed.
 - For `--plan` alone, only Python, the source and valid local JSON configuration are needed; SSH tools and remote connectivity are not required.
@@ -23,7 +24,9 @@ Use `scripts/submit_training.py` to turn a local file or project into a Slurm jo
 3. Honor explicit host, partition and resource choices within configured cluster permissions. Small jobs default to x090; medium, large or requests for 2+ GPUs prefer A800 when host and partition are automatic. Confirm large allocations only when the user's authorization leaves their scope unresolved.
 4. Choose the mode matching the user's request: `--plan` is local only; `--dry-run` uploads and writes remote files but does not call `sbatch`; an ordinary run submits a job. Do not interpret a preview request as submission authorization.
 5. Submit using the bundled helper when authorized. Use the returned host, run directory and job ID to check the specific job and logs. On an uncertain submit result, inspect the queue and run directory before retrying to avoid duplicate allocations.
-6. Report the selected resources, remote directory, job ID when available, current observed state, and commands for this job's logs and cancellation. A successful submission is not evidence that training completed.
+6. Report the selected resources, remote directory, job ID when available, current observed state, and commands for this job's logs and cancellation. Use the returned `accounting_command` to inspect `sacct` state and exit codes after execution; read relevant step records and logs as described in [references/cluster.md](references/cluster.md). A successful submission or empty queue is not evidence that training completed. If accounting is unavailable, report the result as unconfirmed unless another authoritative final-state record is available.
+
+For a requested first-use acceptance check, use `examples/smoke.py` with small, time-limited Slurm resources. Its default tests Python execution only; `--check-gpu` tests driver access, and `--check-torch` tests a tiny CUDA calculation in an existing PyTorch environment. Neither GPU option is for direct execution on a login node. Follow the user's authorized test scope; do not install dependencies or allocate extra resources merely to make a check pass.
 
 ## Operational constraints
 

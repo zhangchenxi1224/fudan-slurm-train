@@ -2,6 +2,8 @@
 
 适用于首次接入、换电脑、添加集群入口或排查 SSH 认证。网络连接应已由学校或实验室允许的方式准备好。
 
+技能安装和集群授权是分别完成的步骤。安装方法及可直接交给 Codex 的首次配置提示词见 [README](../README.md#配置与第一次运行)。代理可以读取模板、协助填写本机配置并运行检查；主机地址、账号授权、主机指纹和允许使用的资源仍需由使用者或集群维护者提供。
+
 ## 向维护者确认的信息
 
 对每个需要使用的集群入口分别确认以下内容：
@@ -120,3 +122,56 @@ SSH 别名和个人命名空间使用英文字母、数字、下划线、点或�
 共享账号下，所有人的 SSH 会话与作业具有同一个 Unix 用户身份。独立密钥便于按人授权和撤销；独立命名空间减少目录冲突。二者都不会建立文件或作业权限隔离。需要权限隔离时，由集群维护者提供独立账号或其他隔离机制。
 
 `config.local.json` 应留在本机；发布修改时保留占位配置模板即可。
+
+## 接入检查与首次验收
+
+以下命令在技能安装目录执行。每个需要使用的集群入口都应单独检查；可只保留并检查自己获授权的入口。
+
+### 1. 本地检查与预览
+
+```powershell
+python scripts/doctor.py --config config.local.json
+python scripts/submit_training.py --config config.local.json --source examples/smoke.py --task-size small --plan
+```
+
+`doctor.py` 默认检查配置是否完整、Python 版本、SSH/SCP 是否可用，以及 `ssh -G` 展开的别名设置。它不会建立 SSH 连接，也不会读取私钥内容、上传文件或提交作业。`--plan` 检查源码清单、资源参数和生成的 sbatch。配置中仍有占位值时，先按检查结果补齐。
+
+### 2. 首次 SSH 认证与远端只读检查
+
+先按本页的 [SSH 别名配置](#配置-ssh-别名) 核对主机指纹，并确认个人公钥已授权、带口令的密钥已在 SSH agent 中可用。随后运行：
+
+```powershell
+python scripts/doctor.py --config config.local.json --remote --host a800
+```
+
+`--host` 使用本地 JSON 中的集群键名，例如 `a800` 或 `x090`。远端检查有超时限制，检查 SSH 登录、所需命令、Slurm 分区与远端根目录条件，不创建运行目录、不上传代码、不调用 `sbatch`。
+
+可选环境检查示例；占位路径和名称应替换为维护者确认的实际值：
+
+```powershell
+python scripts/doctor.py --config config.local.json --remote --host a800 --conda-env ENV_NAME --conda-sh /remote/path/to/conda.sh --cuda-module MODULE_NAME
+```
+
+不使用 conda 或 Modules 时，省略相应选项。输出是带通过、警告或失败结果的 JSON；根据具体检查项修复后再运行。`status=ready` 表示没有必需检查失败，仍可能含警告；代理应同时读取 `scope`、`remote_ready`、`checks` 和 `limitations`。本地模式的 `remote_ready` 为 `null`，失败时状态为 `incomplete`、进程退出码为 1。远端登录节点上的环境检查不会分配计算节点或 GPU，无法证明训练的 CUDA 兼容性、数据完整性、Slurm account/QOS 权限或实际资源可用性。
+
+常见定位顺序：
+
+| 检查结果或现象 | 下一步 |
+| --- | --- |
+| 本地命令缺失 | 安装 Python 3.10+ 或可从终端调用的 OpenSSH；重新打开终端 |
+| 别名没有展开为实际主机、用户或端口 | 检查 `~/.ssh/config`、重复 `Host` 条目及配置中的 `ssh_alias` |
+| SSH 超时或无法访问 | 确认获允许的网络连接、主机地址、端口与跳板机 |
+| 主机指纹未知或变化 | 通过可信渠道向维护者核对，完成首次交互连接 |
+| `Permission denied` 或非交互认证失败 | 检查公钥授权、账号、私钥路径及 SSH agent |
+| Slurm 命令或分区不可见 | 向维护者确认登录入口、初始化方式和所用分区 |
+| 远端目录或环境检查失败 | 检查账号权限、远端 home、根目录或初始化脚本与环境名称 |
+
+检查输出可能包含本机路径、实际 SSH 地址或远端用户名。可以留在本地供代理排查；如需发布到公开 issue，先删除这些信息。
+
+### 3. 小作业与完成状态核验
+
+当使用者已授权本次提交并确认资源和环境后，让代理以 `examples/smoke.py` 为源码生成 `--plan`，选择获授权的集群、分区和最小合适资源；核对后执行提交。示例默认只检查基础 Python 运行。需要进一步验证时，可将训练命令设为 `python3 smoke.py --check-gpu` 检查 GPU 驱动，或 `python3 smoke.py --check-torch` 在已准备好的 PyTorch 环境中运行最小 CUDA 运算。这两个选项需在 Slurm 分配的作业内执行；不要在登录节点直接运行 GPU 测试。即使最小测试通过，实际模型依赖和数据仍需按训练任务核验。
+
+保存这次返回的作业 ID、远端目录及日志路径。使用 `squeue` 查看等待或运行状态，结束后使用 `sacct` 核对该作业的最终 `State` 和 `ExitCode`，并阅读输出与错误日志。`sacct` 记录可能稍有延迟；记录不可用时应明确报告尚未确认，不能将队列为空当作成功。具体命令与边界见 [运行与集群参考](cluster.md)。
+
+共享账号可能同时有其他人的作业。查询、跟踪与取消操作都针对已确认属于本次任务的作业 ID，避免按共享用户名批量操作。

@@ -374,6 +374,7 @@ def execute(args: argparse.Namespace) -> dict:
         "exclusion_note": "Filename exclusions are best effort; review the manifest and source contents before staging.",
         "remote_user": None,
         "queue_command": shlex.join(["ssh", *SSH_OPTIONS, alias, 'squeue -u "$(id -un)"']),
+        "accounting_command": None,
         "log_hint": posixpath.join(project, "logs", f"{args.job_name}-<JOBID>.out"),
         "error_log_hint": posixpath.join(project, "logs", f"{args.job_name}-<JOBID>.err"),
         "cancel_command": shlex.join(["ssh", *SSH_OPTIONS, alias, "scancel <JOBID>"]),
@@ -421,11 +422,17 @@ def execute(args: argparse.Namespace) -> dict:
             raise RuntimeError(f"Submission was attempted once; acceptance is unknown. Check the queue before retrying. Staged run: {directory}. Queue: {result['queue_command']}. Details: {error}") from error
         if not re.fullmatch(r"[0-9]+(?:;[A-Za-z0-9_.-]+)?", output):
             raise RuntimeError(f"Unexpected sbatch --parsable response {output!r}. Do not resubmit until checking the queue. Staged run: {directory}. Queue: {result['queue_command']}")
-        job_id = output.split(";", 1)[0]
-        result.update({"status": "submitted", "job_id": job_id, "submit_stdout": output})
+        job_id, _, job_cluster = output.partition(";")
+        cluster_options = ["-M", job_cluster] if job_cluster else []
+        result.update({"status": "submitted", "job_id": job_id, "job_cluster": job_cluster or None, "submit_stdout": output})
+        result["queue_command"] = shlex.join(["ssh", *SSH_OPTIONS, alias, shlex.join(["squeue", *cluster_options, "-j", job_id])])
+        result["accounting_command"] = shlex.join(["ssh", *SSH_OPTIONS, alias, shlex.join([
+            "sacct", *cluster_options, "-j", job_id, "--parsable2",
+            "--format=JobIDRaw,State%30,ExitCode,DerivedExitCode,Elapsed",
+        ])])
         result["log_hint"] = result["log_hint"].replace("<JOBID>", job_id)
         result["error_log_hint"] = result["error_log_hint"].replace("<JOBID>", job_id)
-        result["cancel_command"] = shlex.join(["ssh", *SSH_OPTIONS, alias, f"scancel {job_id}"])
+        result["cancel_command"] = shlex.join(["ssh", *SSH_OPTIONS, alias, shlex.join(["scancel", *cluster_options, job_id])])
     return result
 
 

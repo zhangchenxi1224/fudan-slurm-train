@@ -221,8 +221,26 @@ class SubmissionTests(unittest.TestCase):
         self.assertEqual(result["status"], "submitted")
         self.assertEqual(result["job_id"], "12345")
         self.assertTrue(result["log_hint"].endswith("project-12345.out"))
-        self.assertIn("squeue -u remote-user", result["queue_command"])
-        self.assertIn("scancel 12345", result["cancel_command"])
+        self.assertIn("squeue -M test-cluster -j 12345", result["queue_command"])
+        self.assertNotIn("-u remote-user", result["queue_command"])
+        self.assertIn("sacct -M test-cluster -j 12345", result["accounting_command"])
+        self.assertIn("ExitCode,DerivedExitCode", result["accounting_command"])
+        self.assertIn("scancel -M test-cluster 12345", result["cancel_command"])
+
+    def test_non_federated_job_hints_target_only_returned_job(self):
+        commands = []
+        base = self.transport(commands)
+        def single_cluster(command, *, timeout=120):
+            result = base(command, timeout=timeout)
+            if "sbatch --parsable" in command[-1]:
+                result.stdout = "67890\n"
+            return result
+        with mock.patch.object(submit, "run", side_effect=single_cluster):
+            result = submit.execute(self.args())
+        self.assertIsNone(result["job_cluster"])
+        self.assertIn("squeue -j 67890", result["queue_command"])
+        self.assertIn("sacct -j 67890", result["accounting_command"])
+        self.assertIn("scancel 67890", result["cancel_command"])
 
     def test_existing_run_directory_failure_prevents_upload_and_submit(self):
         commands = []

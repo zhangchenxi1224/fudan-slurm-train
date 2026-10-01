@@ -78,8 +78,20 @@ python scripts/submit_training.py --source 'C:\path\to\project' --command 'pytho
 ```powershell
 ssh fudan-a800 'squeue -j JOB_ID'
 ssh fudan-a800 'scontrol show job JOB_ID'
+ssh fudan-a800 'sacct -j JOB_ID --parsable2 --format=JobIDRaw,State%30,ExitCode,DerivedExitCode,Elapsed'
 ssh fudan-a800 'tail -n 60 /path/to/LOG_FILE'
 ```
+
+成功提交后，JSON 中的 `queue_command` 针对本次作业 ID；`accounting_command` 查询该作业及其步骤的最终状态和退出码。若 `sbatch` 返回了联邦集群名，返回命令也会带上对应的 `-M`。将这些命令在本地终端执行即可。
+
+完成状态按以下证据判断：
+
+- `PENDING`、`RUNNING`、`COMPLETING` 等状态表示还未完成；队列为空也不能单独证明成功。
+- `sacct` 顶层作业为 `COMPLETED`、`ExitCode=0:0`，并且相关 `.batch` 或 `srun` 步骤没有失败，才支持“作业成功退出”。`DerivedExitCode` 若存在且非零，应进一步检查步骤和日志。退出码形如 `退出值:信号`。
+- `FAILED`、`TIMEOUT`、`OUT_OF_MEMORY`、`CANCELLED` 等终态应按实际结果报告，并检查 stderr。训练命令吞掉异常或使用 `|| true` 也可能使退出码失真，因此模型产物、指标和日志仍需单独核验。
+- `sacct` 记录可能延迟，或集群未启用记账服务。可检查仍保留记录的 `scontrol show job JOB_ID` 中的 `JobState` 与 `ExitCode`；两者都无法提供终态时报告“尚未确认”，不要重新提交来试探状态。
+
+字段定义见 Slurm 官方的 [sacct](https://slurm.schedmd.com/sacct.html) 与 [作业退出码](https://slurm.schedmd.com/job_exit_code.html) 文档。
 
 需要集群概况时：
 
@@ -95,6 +107,24 @@ ssh fudan-a800 'scancel JOB_ID'
 ```
 
 实际使用 x090 时，将别名换为配置中的 x090 别名。不要按共享用户名批量取消作业。
+
+## 首次小作业验收
+
+先按 [接入指南](access.md#接入检查与首次验收) 完成本地检查、SSH 认证和 `doctor.py --remote`。在已授权提交测试的前提下，选择实际允许的集群和分区。以下示例申请 1 GPU、2 CPU、总计 2 GiB 内存、最多 2 分钟，先本地预览：
+
+```powershell
+python scripts/submit_training.py --source examples/smoke.py --command 'python3 smoke.py --check-gpu' --host x090 --gpus 1 --cpus 2 --mem-per-cpu 1G --time 00:02:00 --job-name skill-smoke --plan
+```
+
+核对资源与脚本后，去掉 `--plan` 才会提交。如果该分区要求不同的 CPU/GPU 比例或最低内存，使用维护者确认的最小可用配置。保存 JSON 输出，使用其中的队列命令、记账命令与日志路径完成验收。测试长期排队时，按本次作业 ID 取消即可；运行时限不包含排队时间。
+
+| 示例命令 | 验证范围 |
+| --- | --- |
+| `python3 smoke.py` | 计算节点上的 Python 和作业执行链路，无额外 Python 依赖 |
+| `python3 smoke.py --check-gpu` | 增加 `nvidia-smi` 驱动查询；不代表 PyTorch/CUDA 运算已验证 |
+| `python smoke.py --check-torch` | 增加已安装 PyTorch 的 CUDA 可用性及小矩阵计算；可搭配 `--conda-env`、`--conda-sh` |
+
+两个 GPU 选项必须通过申请了 GPU 的 Slurm 作业执行，脚本拒绝在没有 `SLURM_JOB_ID` 的环境执行 GPU 检查。训练框架未安装时，该检查会失败并报告原因；技能不会自动安装依赖。计算节点的环境可能与登录节点不同，以作业内结果为准。
 
 ## 常见问题
 
